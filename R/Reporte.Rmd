@@ -17,29 +17,53 @@ library("ggplot2")
 ```
 
 #### Download data
-Downloading data from recount 3 database of project 'Chracterization_of_iPSC_der
-ived_macrophages___cardiovascular_pilot_Open_access'. This study tries to understand
-the genetic mechanisms behind the formation of foam cells in the atherosclerosis
-pathology, using iPSC-derived macrophages, exposed to acetylated LDL (acLDL). 
+Downloading data from recount 3 database of project 'Transcriptome profiling in
+knock-in mouse models of Huntington''s disease  [Striatum_mRNA] (SRP053398). The
+data of this study is to analyze the expression profiles of RNA in mouse models 
+with Hungtington's diseaase at different ages with different lengths of CAG 
+repeats, to understand better the molecular changes related with this neurodegenarative 
+disease.
+
 
 ```{r}
-rse_data_ERP022909 <- recount3::create_rse_manual(
-  project = "ERP022909",
+rse_gene_SRP053398 <- recount3::create_rse_manual(
+  project = "SRP053398",
   project_home = "data_sources/sra",
-  organism = "human",
-  annotation = "gencode_v26",
+  organism = "mouse",
+  annotation = "gencode_v23",
   type = "gene")
 ```
 #### Processing data
 
 ```{r}
 # Transform the counts
-assay(rse_data_ERP022909, "counts") <- compute_read_counts(rse_data_ERP022909)
+assay(rse_gene_SRP053398, "counts") <- compute_read_counts(rse_gene_SRP053398)
 
 # Before expanding the data we should explore the attributes
-rse_data_ERP022909$sra.sample_attributes[1:3]
+rse_gene_SRP053398$sra.sample_attributes[1:3]
 ```
 
+```{r}
+# Now we expand the attributes to process the data to make easier the analysis
+rse_gene_SRP053398 <- expand_sra_attributes(rse_gene_SRP053398)
+colData(rse_gene_SRP053398)[
+    ,
+    grepl("^sra_attribute", colnames(colData(rse_gene_SRP053398)))]
+```
+
+
+```{r}
+# To perform the statistical analysis we need to use a correct R format
+rse_gene_SRP053398$sra_attribute.age <- as.numeric(gsub(" month", "", rse_gene_SRP053398$sra_attribute.age))
+rse_gene_SRP053398$sra_attribute.genotype <- factor(tolower(rse_gene_SRP053398$sra_attribute.genotype))
+rse_gene_SRP053398$sra_attribute.Sex <- factor(rse_gene_SRP053398$sra_attribute.Sex)
+
+# We can check the summary of the interest variables
+summary(as.data.frame(colData(rse_gene_SRP053398)[
+    ,
+    grepl("^sra_attribute.[age|disease|RIN|sex]", colnames(colData(rse_gene_SRP053398)))
+]))
+```
 
 
 
