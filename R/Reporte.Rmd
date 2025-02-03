@@ -14,6 +14,8 @@ bibliography: "./Proyect_references.bib"
 ```{r}
 library("recount3")
 library("ggplot2")
+library("edgeR")
+library("limma")
 ```
 
 #### Download data
@@ -64,6 +66,70 @@ summary(as.data.frame(colData(rse_gene_SRP053398)[
     grepl("^sra_attribute.[age|disease|RIN|sex]", colnames(colData(rse_gene_SRP053398)))
 ]))
 ```
+We will check the quality of the data calculating the proportion of assigned genes.
+```{r}
+rse_gene_SRP053398$assigned_gene_prop <- rse_gene_SRP053398$recount_qc.gene_fc_count_all.assigned / 
+  rse_gene_SRP053398$recount_qc.gene_fc_count_all.total
+summary(rse_gene_SRP053398$assigned_gene_prop)
+```
+```{r}
+# We can create another variable to make more general the analysis
+rse_gene_SRP053398$state <- factor(ifelse(rse_gene_SRP053398$sra_attribute.genotype != 'wild type' , "knock-in", "wildtype"))
+table(rse_gene_SRP053398$state)
+```
+
+
+```{r}
+hist(rse_gene_SRP053398$assigned_gene_prop, main = "Assigned genes", xlab = "Proportion of assigned genes")
+```
+```{r}
+# We can also check if there is difference in the quality of the data between the different states
+with(colData(rse_gene_SRP053398), tapply(assigned_gene_prop, state, summary))
+```
+#### Normalization of the data
+
+Normalizing data is essential because it ensures that all features contribute 
+equally to the analysis, preventing bias towards variables with larger scales.
+```{r}
+# With the library of edgeR we will normalize the data
+dge <- DGEList(
+    counts = assay(rse_gene_SRP053398, "counts"),
+    genes = rowData(rse_gene_SRP053398)
+)
+dge <- calcNormFactors(dge)
+```
+## Expression data analyisis
+
+#### Data distribution plots
+
+```{r}
+ggplot(as.data.frame(colData(rse_gene_SRP053398)), aes(y = assigned_gene_prop, x = state,)) +
+    geom_violin(trim = FALSE, alpha = 0.3, fill = 'red') +
+    geom_boxplot(width = 0.15) +
+    theme_bw(base_size = 20) +
+    ylab("Assigned Gene Prop") +
+    xlab("Age Group")
+```
+#### Statistical model
+```{r}
+mod <- model.matrix(~ state + sra_attribute.Sex + sra_attribute.age + assigned_gene_prop,
+    data = colData(rse_gene_SRP053398)
+)
+colnames(mod)
+```
+Now with the statistical model
+```{r}
+vGene <- voom(dge, mod, plot = TRUE)
+```
+
+
+
+
+
+
+
+
+
 
 
 
