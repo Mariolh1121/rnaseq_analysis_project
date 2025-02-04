@@ -6,7 +6,7 @@ output:
   pdf_document:
     toc: yes
     toc_depth: 3
-bibliography: "./Proyect_references.bib"
+bibliography: "../Proyect_references.bib"
 ---
 ## Data process
 
@@ -16,6 +16,8 @@ library("recount3")
 library("ggplot2")
 library("edgeR")
 library("limma")
+library("pheatmap")
+library("RColorBrewer")
 ```
 
 #### Download data
@@ -100,6 +102,9 @@ dge <- calcNormFactors(dge)
 ```
 ## Expression data analyisis
 
+Here we will compare the differences between the different states of the mice (knock-in and wildtype),
+and the differences of the knock-in mice CAG repeats lengths.
+
 #### Data distribution plots
 
 ```{r}
@@ -110,6 +115,19 @@ ggplot(as.data.frame(colData(rse_gene_SRP053398)), aes(y = assigned_gene_prop, x
     ylab("Assigned Gene Prop") +
     xlab("Age Group")
 ```
+```{r}
+
+ggplot(as.data.frame(colData(rse_gene_SRP053398)), aes(y = assigned_gene_prop, x = sra_attribute.genotype,
+    fill = sra_attribute.genotype)) +
+    geom_violin(trim = FALSE, alpha = 0.3, fill = 'red') +
+    geom_boxplot(width = 0.15) +
+    theme_bw(base_size = 20) +
+    ylab("Assigned Gene Prop") +
+    xlab("Age Group") + 
+    theme(axis.text.x = element_blank())
+  
+```
+
 #### Statistical model
 ```{r}
 mod <- model.matrix(~ state + sra_attribute.Sex + sra_attribute.age + assigned_gene_prop,
@@ -117,12 +135,138 @@ mod <- model.matrix(~ state + sra_attribute.Sex + sra_attribute.age + assigned_g
 )
 colnames(mod)
 ```
-Now with the statistical model
+
+```{r}
+mod2 <- model.matrix(~ sra_attribute.genotype + sra_attribute.Sex + sra_attribute.age + assigned_gene_prop,
+    data = colData(rse_gene_SRP053398)
+)
+colnames(mod2)
+```
+
+Now with the statistical model, we can visualize the expression data between the 
+two models.
 ```{r}
 vGene <- voom(dge, mod, plot = TRUE)
 ```
+```{r}
+vGene2 <- voom(dge, mod2, plot = TRUE)
+```
+
+Lets see the data in an easier way.
+```{r}
+eb_results <- eBayes(lmFit(vGene))
+eb_results2 <- eBayes(lmFit(vGene2))
+```
+
+```{r}
+de_results <- topTable(
+    eb_results,
+    coef = 2,
+    number = nrow(rse_gene_SRP053398),
+    sort.by = "none"
+)
+dim(de_results)
+```
+```{r}
+de_results2 <- topTable(
+    eb_results2,
+    coef = 2,
+    number = nrow(rse_gene_SRP053398),
+    sort.by = "none"
+)
+dim(de_results2)
+```
+
+```{r}
+head(de_results)
+```
+```{r}
+head(de_results2)
+```
 
 
+```{r}
+# Differentially expressed genes
+table(de_results$adj.P.Val < 0.05)
+```
+```{r}
+# Differentially expressed genes
+table(de_results2$adj.P.Val < 0.05)
+```
+
+```{r}
+# Performing volcano plot
+volcanoplot(eb_results, coef = 2, highlight = 3, names = de_results$gene_name)
+```
+```{r}
+volcanoplot(eb_results2, coef = 2, highlight = 3, names = de_results$gene_name)
+```
+
+
+```{r}
+# Performing cluster heatmap
+
+# Extracting over/sub expressed genes
+exprs_heatmap <- vGene$E[rank(de_results$adj.P.Val) <= 50, ]
+
+df <- as.data.frame(colData(rse_gene_SRP053398)[, c("state", "sra_attribute.genotype", "sra_attribute.age", "sra_attribute.Sex")])
+colnames(df) <- c("State", "gentoype", "Age", "Sex")
+
+library("pheatmap")
+pheatmap(
+    exprs_heatmap,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    show_rownames = FALSE,
+    show_colnames = FALSE,
+    annotation_col = df
+)
+```
+#### Multidimensional scaling
+```{r}
+col.group <- df$State
+levels(col.group) <- brewer.pal(nlevels(col.group), "Set1")
+
+col.group <- as.character(col.group)
+
+plotMDS(vGene$E, labels = df$State, col = col.group)
+```
+
+```{r}
+col.group2 <- df$gentoype
+levels(col.group2) <- brewer.pal(nlevels(col.group2), "Set1")
+
+col.group2 <- as.character(col.group2)
+
+plotMDS(vGene2$E, labels = df$genotype, col = col.group2)
+```
+
+
+```{r}
+col.group <- df$Age
+levels(col.group) <- brewer.pal(nlevels(col.group), "Set1")
+
+col.group <- as.character(col.group)
+
+plotMDS(vGene$E, labels = df$Age, col = col.group)
+```
+
+## Biological discussion
+
+The analysis of the data shows that there are differences in the expression of both models.
+In the first model only comparing the state of the mice, there were more differential expressed genes
+than the model that considers also the knock-in mice CAG repeats lengths. 
+In the first model, there was a clear separation in the MDS Plot, that indicates that shows the effect
+of the knock in. In the second model the effect of the CAG repeats lengths has an impact more specific 
+in some genes like the Onecut1 or Klf7, that suggests that some genes are regulated in a dependant way
+of the CAG repeats lengths.
+In conclusion the knock-in the mutation of the Htt has a strong effect in gene expression, that could
+be reflected in the modifications of multiple biological pathways, like inflammation, oxidative stress or
+neurodegeneration. The CAG repeats lengths has a less impact in the gene expression, leading to a more
+gradual or restricted effect in specific processes. These few overexpressed genes and subexpressed genes,
+could be related to the severity of the disease. In the study already performed by Langelder et al. (2016), 
+[@langfelder_2016] they mentioned that the CAG length and age are highly correlated with 13 striatal and 5 
+cortical modules, implicated in the dysregulation of cyclic AMP signaling, cell death and procadherin genes.
 
 
 
